@@ -3,10 +3,9 @@ import React, {Component, PropTypes} from "react"
 var Papa = require('./../../papaparse.min.js');
 var file = require('file-system');
 
-
-function sortByTime(dataArray){
-  return dataArray.sort((a,b)=>{
-	   return a.time < b.time ? -1 : a.time > b.time ? 1 : 0;
+function sortByTime(dataArray) {
+  return dataArray.sort((a, b) => {
+    return a.time < b.time ? -1 : a.time > b.time ? 1 : 0;
   })
 }
 
@@ -29,9 +28,8 @@ export default class ApplicationWrapper extends Component {
   }
 
   handleParsedData = (results) => {
-    // let { results } = this.state
-    // debugger
-    //
+    // TODO merge additional results with existing results
+
     this.setState({fileName: '', results})
   }
 
@@ -54,7 +52,7 @@ export default class ApplicationWrapper extends Component {
     this.setState({uploadedFile: uploadedFile, fileName: currentFile.name})
   }
 
-  handleSortingResult( sortedResult ) {
+  handleSortingResult(sortedResult) {
 
     var transactionBase = {
       // date {
@@ -69,22 +67,17 @@ export default class ApplicationWrapper extends Component {
     var currentDate = null
     var unitType = null
 
-    sortedResult.map(item => {
+    sortByTime(sortedResult).map(item => {
 
-      // if (item.balance == 3233.6770590468177){
-      //   debugger
-      // }
-      //
-      if (!item.time || !item.type || !item.balance || !item.amount){
+      if (!item.time || !item.type || !item.balance || !item.amount) {
         return
       }
 
-      // if (item.type == 'fee') {
-      //   totalFee += item.amount
-      // }
+      if (item.type == 'fee') {
+        totalFee += item.amount
+      }
 
-      // if (currentDate != null && currentDate != item.time.replace(/T.*/, '') ){
-      if (currentDate != null && transactionBase[item.time.replace(/T.*/, '')] == undefined){
+      if (transactionBase[item.time.replace(/T.*/, '')] == undefined) {
         currentDate = null
         unitType = null
       }
@@ -97,18 +90,18 @@ export default class ApplicationWrapper extends Component {
 
         transactionBase[currentDate] = {}
         transactionBase[currentDate][unitType] = {
-          balance: item.balance,
+          balance: item.balance
         }
 
-        transactionBase[currentDate][unitType]['change'] = ( item.type != 'fee' ) ? item.amount : 0
-        transactionBase[currentDate][unitType]['fees'] = ( item.type == 'fee' ) ? item.amount : 0
+        transactionBase[currentDate][unitType]['change'] = (item.type != 'fee') ? item.amount : 0
+        transactionBase[currentDate][unitType]['fees'] = (item.type == 'fee') ? item.amount : 0
 
-      } else if ( currentDate == item.time.replace(/T.*/, '') ) {
+      } else {
 
         // add to balance
         var currentDateUnit = transactionBase[currentDate][item['amount/balance unit']]
 
-        if (currentDateUnit){
+        if (currentDateUnit) {
 
           if (item.type == 'fee') {
             currentDateUnit['fees'] += item.amount
@@ -117,15 +110,15 @@ export default class ApplicationWrapper extends Component {
           }
 
           currentDateUnit['balance'] = item.balance
-
         } else {
-          // different unit
-         currentDateUnit = {
-           balance: item.balance
+
+          // Different unit / Same Date
+          currentDateUnit = {
+            balance: item.balance
           }
 
-          currentDateUnit['change'] = ( item.type != 'fee' ) ? item.amount : 0
-          currentDateUnit['fees'] = ( item.type == 'fee' ) ? item.amount : 0
+          currentDateUnit['change'] = (item.type != 'fee') ? item.amount : 0
+          currentDateUnit['fees'] = (item.type == 'fee') ? item.amount : 0
         }
 
       }
@@ -134,192 +127,116 @@ export default class ApplicationWrapper extends Component {
     return transactionBase
   }
 
+  renderTableRow(sortedOranizedData, dateTime) {
+    var units = Object.keys(sortedOranizedData[dateTime])
+    // TODO handle multiple unitType
+
+    if (units.length == 1) {
+      var currentUnit = sortedOranizedData[dateTime][units[0]]
+      // TODO balance sheet seems to be slightly off
+
+      return (
+        <tr>
+          <td>
+            {dateTime}
+          </td>
+          <td>
+            {Math.round((currentUnit.change - currentUnit.fees) * 100) / 100}
+          </td>
+          <td>
+            {Math.round(currentUnit.fees * 100) / 100}
+          </td>
+          <td>
+            {Math.round(currentUnit.balance * 100) / 100}
+          </td>
+        </tr>
+      )
+    }
+  }
+
   renderParseData = () => {
     let {results} = this.state
 
-      var totalFee = 0
-      var currentDate = null, currentDateFees = 0, hasConverted = false
-      var currentBalance, currentChange, renderDate, renderDateFees, renderBalance, renderChange, amountUnit, convertedBalance, convertedChange, convertedUnit
+    var totalFee = 0
+    var currentDate = null, currentDateFees = 0, hasConverted = false
+    var currentBalance, currentChange, renderDate, renderDateFees, renderBalance, renderChange, amountUnit, convertedBalance, convertedChange, convertedUnit
 
-      var sortedOranizedData = this.handleSortingResult( sortByTime(results.data) )
+    var sortedOranizedData = this.handleSortingResult(results.data)
 
-      var el = Object.keys(sortedOranizedData).map( dateTime => {
-        var units = Object.keys( sortedOranizedData[dateTime] )
+    var el = Object.keys(sortedOranizedData).map(dateTime => {
+      return this.renderTableRow(sortedOranizedData, dateTime)
+    })
 
-        // var unitTypes = dateTime.keySeq().toArray()
-        if (units.length == 1){
-          var currentUnit = sortedOranizedData[dateTime][units[0]]
-
-          return (
+    return (
+      <div>
+        <table className='table table-striped'>
+          <thead>
             <tr>
-              <td>
-                {dateTime}
-              </td>
-              <td>
-                { Math.round((currentUnit.change - currentUnit.fees) * 100) / 100 }
-              </td>
-              <td>
-                { Math.round(currentUnit.fees * 100) / 100 }
-              </td>
-              <td>
-                { Math.round(currentUnit.balance * 100) / 100}
-              </td>
+              <th className="sort-header">Date</th>
+              <th className="sort-header">Change</th>
+              <th className="sort-header">Fees</th>
+              <th className="sort-header">Balance</th>
             </tr>
-          )
+          </thead>
+          <tbody>
 
-        }
-        // }
-      })
-      // return sortedResult.map(item => {
-      //   if (!item.time || !item.type || !item.balance || !item.amount){
-      //     return
-      //   }
-      //
-      //   // if (item.type == 'fee') {
-      //   //   totalFee += item.amount
-      //   // }
-      //   //
-      //
-      //   // inital setup
-      //   if (currentDate == null) {
-      //     amountUnit = item['amount/balance unit']
-      //     currentDate = item.time.replace(/T.*/, '')
-      //     currentChange = item.amount
-      //     currentBalance = item.balance
-      //
-      //     if (item.type == 'fee') {
-      //       currentDateFees = item.amount
-      //     }
-      //
-      //   } else if (currentDate == item.time.replace(/T.*/, '')) {
-      //     // same date
-      //     currentChange += item.amount
-      //     currentBalance = item.balance
-      //
-      //     if (item.type == 'fee') {
-      //       currentDateFees += item.amount
-      //     }
-      //
-      //     if (amountUnit != item['amount/balance unit'] ) {
-      //       convertedUnit = item['amount/balance unit']
-      //
-      //       if (!convertedBalance || !convertedChange ){
-      //
-      //       } else {
-      //
-      //       }
-      //
-      //     }
-      //
-      //   } else {
-      //     // same new date
-      //     renderDate = currentDate
-      //     renderChange = currentChange
-      //     renderBalance = currentBalance
-      //     renderDateFees = currentDateFees
-      //
-      //     currentDate = item.time.replace(/T.*/, '')
-      //     currentChange = item.amount
-      //     currentBalance = item.balance
-      //
-      //     if (item.type == 'fee') {
-      //       currentDateFees = item.amount
-      //     }
-      //
-      //     return this.handleRenderRow(renderDate, renderBalance, renderChange, renderDateFees)
-      //   }
-      // })
+            {el}
 
-        return <div>
-          <table className='table table-striped'>
-            <thead>
-              <tr>
-                <th className="sort-header">Date</th>
-                <th className="sort-header">Change</th>
-                <th className="sort-header">Fees</th>
-                <th className="sort-header">Balance</th>
-              </tr>
-            </thead>
-            <tbody>
+          </tbody>
+        </table>
+      </div>
+    )
+  }
 
-              {el}
-              {/* { this.handleRenderRow(currentDate, currentBalance, currentChange, currentDateFees) } */}
+  renderExport() {
+    return (
+      <div className="col-md-12">
+        <button className='btn btn-primary'>
+          Export
+        </button>
+      </div>
+    )
+  }
 
-            </tbody>
-          </table>
-          {/* <div>Unit: {amountUnit}</div> */}
-          {/* { amountUnit == "USD" ? <div>Total Fees: {totalFee}</div> : null } */}
-        </div>
+  render() {
+    let {fileName, uploadedFile, results} = this.state
+    var isExportReady = false
+    return (
+      <div>
+        <div className="col-md-2">
 
-      }
-
-      // handleRenderRow(date, balance, change, fees){
-      handleRenderRow(dateObject){
-
-        return (
-          <tr>
-            <td>
-              {date}
-            </td>
-            <td>
-              { Math.round((change - fees) * 100) / 100 }
-            </td>
-            <td>
-              { Math.round(fees * 100) / 100 }
-            </td>
-            <td>
-              { Math.round(balance * 100) / 100}
-            </td>
-          </tr>
-        )
-      }
-
-      render() {
-        let {fileName, uploadedFile, results} = this.state
-
-        return (
           <div>
-            <div className="col-md-4 toolbar">
-
-              <div>
-                <div className="btn btn-default btn-file">
-                  <label className="btn btn-success btn-file">
-                    Browse
-                    <input ref="file" type="file" className="upload-license-file" onChange={this.handleFileChange} style={{
-                      'display': 'none'
-                    }} disabled={false}/>
-                  </label>
-                  <div ref='fileName' className='license-file-name'>{fileName || 'No file choosen'}</div>
-                </div>
-              </div>
-
-              <div>
-                <div>
-                  Uploaded Files
-                </div>
-                {uploadedFile && uploadedFile.map(file => {
-                  return <div>{file.name}</div>
-                })}
-              </div>
-
-              <div className="col-md-12">
-                <button className='btn btn-primary'>
-                  Export
-                </button>
-              </div>
-            </div>
-
-            <div className="col-md-8">
-              {!results
-                ? <div>Consolidate your csv files into one documentation.
-                  </div>
-                : this.renderParseData()
-}
+            <div className="btn btn-default btn-file">
+              <label className="btn btn-success btn-file">
+                Browse
+                <input ref="file" type="file" className="upload-license-file" onChange={this.handleFileChange} style={{
+                  'display': 'none'
+                }} disabled={false}/>
+              </label>
+              <div ref='fileName' className='license-file-name'>{fileName || 'No file choosen'}</div>
             </div>
           </div>
-        )
-      }
 
-    }
+          <div>
+            <div>
+              Uploaded Files
+            </div>
+            {uploadedFile && uploadedFile.map(file => {
+              return <div>{file.name}</div>
+            })}
+          </div>
 
-    ApplicationWrapper.propTypes = {}
+          {isExportReady && this.renderExport()}
+        </div>
+
+        <div className="col-md-10">
+          { !results
+            ? <div> Consolidate your csv files into one documentation. </div>
+            : this.renderParseData() }
+        </div>
+      </div>
+    )
+  }
+}
+
+ApplicationWrapper.propTypes = {}
